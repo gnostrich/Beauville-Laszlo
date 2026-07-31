@@ -1,0 +1,3 @@
+{"ts": "2026-07-31T11:20:00Z", "event": "phase0_killcheck", "verdict": "clear", "evidence": ["loogle: 0 hits Beauville/Laszlo/BeauvilleLaszlo/GluingPair", "no mathlib4 PR or Zulip campaign found", "FLT blueprint: BL not on roadmap"]}
+{"ts": "2026-07-31T11:20:00Z", "event": "decision_D1", "outcome": "not_taken", "notes": "AdicCompletion API sufficient to state; universal properties isolated as nodes D07/D08; no Noetherian downgrade"}
+{"ts": "2026-07-31T11:20:00Z", "event": "harness_config", "prover": "harmonic-aristotle api v3", "toolchain": "leanprover/lean4:v4.28.0", "mathlib": "v4.28.0", "allowlist": ["propext", "Classical.choice", "Quot.sound"], "budget_per_node": 3, "calibration": "H0 calibration_localization_injective"}

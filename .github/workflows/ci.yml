@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (statements elaborate; kernel-checked)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+
+  comparator:
+    # Ship gate: no `sorry` anywhere, and each headline theorem's axiom set is exactly
+    # the allowlist [propext, Classical.choice, Quot.sound] (kernel-checked via
+    # #print axioms + #guard_msgs). Expected RED until the campaign completes.
+    name: Comparator (no-sorry + axiom allowlist)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+      - name: No sorry in library
+        run: "! grep -rnw --include='*.lean' 'sorry' BeauvilleLaszlo BeauvilleLaszlo.lean"
+      - name: Axiom comparator
+        run: lake env lean AxiomCheck.lean
