@@ -73,7 +73,7 @@ noncomputable def sqSnd (A : Type u) [CommRing A] (f : A)
     (M : Type u) [AddCommGroup M] [Module A M] :
     LocalizedModule (Submonoid.powers f) M × (M ⊗[A] B) →ₗ[A]
       LocalizedModule (Submonoid.powers f) (M ⊗[A] B) :=
-  (LocalizedModule.map (Submonoid.powers f) (toTensor A B M)).comp
+  ((LocalizedModule.map (Submonoid.powers f) (toTensor A B M)).restrictScalars A).comp
       (LinearMap.fst A (LocalizedModule (Submonoid.powers f) M) (M ⊗[A] B)) -
     (LocalizedModule.mkLinearMap (Submonoid.powers f) (M ⊗[A] B)).comp
       (LinearMap.snd A (LocalizedModule (Submonoid.powers f) M) (M ⊗[A] B))
