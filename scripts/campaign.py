@@ -5,10 +5,11 @@ Usage:
   python scripts/campaign.py run D05 --attempt 2 --hints-file hints/D05.md
   python scripts/campaign.py wave D01 D02 D03  # parallel attempt-1 wave
   python scripts/campaign.py file <path.lean> --node-id XX --attempt N  # explicit file
+  python scripts/campaign.py attach <project_id> --node-id XX --attempt N  # resume poll
 
 Per-node protocol (frozen): attempt 1 raw; attempt 2 with Stacks proof-sketch hints;
 attempt 3 one split into <=2 sublemmas (file crafted by hand, submitted via `file`).
-Every attempt is logged to REGISTRY.jsonl (append-only).
+Every submission and result is logged to REGISTRY.jsonl (append-only).
 
 Acceptance: Aristotle server-side Lean verification (trust directive from the mission
 owner); the binding axiom/no-sorry gate is the CI comparator (AxiomCheck.lean).
@@ -22,7 +23,6 @@ import sys
 import time
 from pathlib import Path
 
-import aristotlelib
 from aristotlelib import Project
 
 REPO = Path(__file__).resolve().parent.parent
@@ -68,6 +68,42 @@ def make_submission_dir(node_id: str, attempt: int, lean_text: str) -> Path:
     return d
 
 
+async def poll_and_fetch(project: Project, entry: dict, t0: float) -> dict:
+    node_id, attempt, name = entry["node_id"], entry["attempt"], entry["theorem"]
+    try:
+        while True:
+            await project.refresh()
+            if project.status.name == "IDLE":
+                break
+            if time.time() - t0 > TIMEOUT_SECONDS:
+                entry.update(result="failed", notes="timeout")
+                break
+            await asyncio.sleep(POLL_SECONDS)
+        dest = RUNS / f"{node_id}_a{attempt}" / "result"
+        dest.mkdir(parents=True, exist_ok=True)
+        if project.has_files:
+            await project.get_files(dest)
+        entry["wall_time_s"] = round(time.time() - t0)
+        proved = False
+        for p in sorted(Path(dest).rglob("*.lean")):
+            text = p.read_text()
+            if f"theorem {name}" in text and "sorry" not in text:
+                proved = True
+                entry["result_file"] = str(p.relative_to(REPO))
+                entry["lines"] = len(text.splitlines())
+                break
+        if "result" not in entry:
+            entry["result"] = "proved" if proved else "failed"
+        entry["axioms"] = "deferred_to_ci_comparator"
+    except Exception as exc:  # noqa: BLE001
+        entry.update(result="failed", wall_time_s=round(time.time() - t0),
+                     notes=f"error: {type(exc).__name__}: {exc}")
+    log_registry(entry)
+    print(f"[{node_id} a{attempt}] {entry['result']} ({entry.get('wall_time_s', '?')}s)",
+          flush=True)
+    return entry
+
+
 async def run_node(node_id: str, attempt: int, lean_text: str, hints: str | None) -> dict:
     name = theorem_name(lean_text)
     prompt = PROMPT.format(tc=TOOLCHAIN, name=name)
@@ -86,42 +122,26 @@ async def run_node(node_id: str, attempt: int, lean_text: str, hints: str | None
     }
     try:
         project = await Project.create_from_directory(prompt, sub)
-        entry["project_id"] = project.project_id
-        print(f"[{node_id} a{attempt}] submitted: {project.project_id}", flush=True)
-        while True:
-            await asyncio.sleep(POLL_SECONDS)
-            await project.refresh()
-            if project.status.name == "IDLE":
-                break
-            if time.time() - t0 > TIMEOUT_SECONDS:
-                entry.update(result="failed", notes="timeout")
-                break
-        dest = RUNS / f"{node_id}_a{attempt}" / "result"
-        dest.mkdir(parents=True, exist_ok=True)
-        out = None
-        if project.has_files:
-            out = await project.get_files(dest)
-        entry["wall_time_s"] = round(time.time() - t0)
-        # classify: returned lean file for the node without sorry => proved
-        proved = False
-        if out is not None:
-            for p in sorted(Path(dest).rglob("*.lean")):
-                text = p.read_text()
-                if name in text and "sorry" not in text:
-                    proved = True
-                    entry["result_file"] = str(p.relative_to(REPO))
-                    entry["lines"] = len(text.splitlines())
-                    break
-        if "result" not in entry:
-            entry["result"] = "proved" if proved else "failed"
-        entry["axioms"] = "deferred_to_ci_comparator"
     except Exception as exc:  # noqa: BLE001
         entry.update(result="failed", wall_time_s=round(time.time() - t0),
-                     notes=f"error: {type(exc).__name__}: {exc}")
-    log_registry(entry)
-    print(f"[{node_id} a{attempt}] {entry['result']} ({entry.get('wall_time_s', '?')}s)",
-          flush=True)
-    return entry
+                     notes=f"submit error: {type(exc).__name__}: {exc}")
+        log_registry(entry)
+        print(f"[{node_id} a{attempt}] submit failed: {exc}", flush=True)
+        return entry
+    entry["project_id"] = project.project_id
+    log_registry({"event": "submitted", "node_id": node_id, "attempt": attempt,
+                  "project_id": project.project_id})
+    print(f"[{node_id} a{attempt}] submitted: {project.project_id}", flush=True)
+    return await poll_and_fetch(project, entry, t0)
+
+
+async def attach(project_id: str, node_id: str, attempt: int) -> dict:
+    lean_text = node_file(node_id) if node_id in NODES else ""
+    name = theorem_name(lean_text) if lean_text else node_id
+    entry = {"node_id": node_id, "attempt": attempt, "config": "attach",
+             "theorem": name, "project_id": project_id}
+    project = await Project.from_id(project_id)
+    return await poll_and_fetch(project, entry, time.time())
 
 
 async def main() -> None:
@@ -139,6 +159,10 @@ async def main() -> None:
     p_file.add_argument("--node-id", required=True)
     p_file.add_argument("--attempt", type=int, required=True)
     p_file.add_argument("--hints-file")
+    p_att = sub.add_parser("attach")
+    p_att.add_argument("project_id")
+    p_att.add_argument("--node-id", required=True)
+    p_att.add_argument("--attempt", type=int, required=True)
     args = ap.parse_args()
 
     if args.cmd == "run":
@@ -150,6 +174,8 @@ async def main() -> None:
     elif args.cmd == "file":
         hints = Path(args.hints_file).read_text() if args.hints_file else None
         await run_node(args.node_id, args.attempt, Path(args.path).read_text(), hints)
+    elif args.cmd == "attach":
+        await attach(args.project_id, args.node_id, args.attempt)
 
 
 if __name__ == "__main__":
