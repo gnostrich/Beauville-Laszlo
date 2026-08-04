@@ -46,3 +46,5 @@
 {"event": "submitted", "node_id": "D11", "attempt": 2, "config": "hints", "project_id": "2b7a5190-84fa-40d8-98a0-9a9befc4c9f2", "ts": "2026-08-04T10:25:44Z"}
 {"event": "submitted", "node_id": "D12", "attempt": 2, "config": "hints", "project_id": "ff2389a9-fe2c-4e34-b469-02bd2a166ac3", "ts": "2026-08-04T10:25:56Z"}
 {"event": "submitted", "node_id": "D13", "attempt": 2, "config": "hints", "project_id": "ca0dcb18-a44c-4999-8df1-417e2e699e4c", "ts": "2026-08-04T10:26:08Z"}
+{"event": "result", "node_id": "D02", "attempt": 2, "config": "hints", "theorem": "sqSnd_surjective", "project_id": "0a4b520f-7798-4428-a10a-d3bf1bf71775", "result": "proved", "result_file": "aristotle_runs/D02_a2/result/submit_aristotle/D02.lean", "lines": 203, "axioms": "deferred_to_ci_comparator", "ts": "2026-08-04T11:19:27Z"}
+{"event": "result", "node_id": "D05", "attempt": 2, "config": "hints", "theorem": "isSMulRegular_baseChange", "project_id": "49b93bca-525d-434d-8b83-b11bf478a3fd", "result": "proved", "result_file": "aristotle_runs/D05_a2/result/submit_aristotle/D05.lean", "lines": 269, "axioms": "deferred_to_ci_comparator", "ts": "2026-08-04T11:19:32Z"}
